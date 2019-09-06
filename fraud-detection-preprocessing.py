@@ -2,6 +2,9 @@ import pandas as pd
 import sklearn
 import datetime
 import time
+from xgboost import XGBClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 
 def dataloader():
@@ -140,6 +143,21 @@ def one_hot_encoding(df, feature_type):
     return df
 
 
+def split(data, label):
+    seed = 892714028
+    X_train, X_test, y_train, y_test = train_test_split(data, label, test_size=0.25, random_state=seed)
+    return X_train, X_test, y_train, y_test
+
+
+def fit_test(X_train, X_test, y_train, y_test):
+    model = XGBClassifier()
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    predictions = [round(value) for value in y_pred]
+    accuracy = accuracy_score(y_test, predictions)
+    print("Accuracy: %.2f%%" % (accuracy * 100.0))
+
+
 if __name__ == '__main__':
     t = time.time()
 
@@ -178,4 +196,8 @@ if __name__ == '__main__':
     train = one_hot_encoding(train,feature_type_dict)
 
     print(train.shape)
+    print('splitting dataset')
+    X_train, X_test, y_train, y_test = split(train, train_label)
+    print('fitting model')
+    fit_test(X_train, X_test, y_train, y_test)
     print('time ultilized {}'.format(time.time() - t))
