@@ -45,7 +45,7 @@ def find_unique_value(df, feature_type):
     return feature_unique_value
 
 
-def reduce_f_dim(col, critical_value):
+def reduce_f_dim(col, critical_value, col_name):
     temp = col.value_counts().to_dict()
     total = sum(temp.values())
     new_col = []
@@ -53,19 +53,19 @@ def reduce_f_dim(col, critical_value):
         if temp[keys] / total > critical_value:
             new_col.append(keys)
         else:
-            new_col.append('etc')
+            new_col.append('etc' + col_name)
     return new_col
 
 
 def categorical_feature_reduce_dim(df, feature_unique_value,
                                    critical_feature_num, critical_value):
     for i in feature_unique_value.keys():
+        col = df[i]
+        fill_value = 'null' + i
+        col = col.fillna(fill_value)
         if feature_unique_value[i] > critical_feature_num:
-            col = df[i]
-            fill_value = 'null'
-            col = col.fillna(fill_value)
-            col = reduce_f_dim(col, critical_value)
-            df[i] = col
+            col = reduce_f_dim(col, critical_value, i)
+        df[i] = col
     return df
 
 
@@ -103,15 +103,12 @@ def fill_null(column, value):
     :param value: 'avg', 'med', or float number
     :return: column with null entry filled
     """
-    assert type(column) == type(pd.DataFrame([1]))
 
     if value not in ['avg', 'med']:
-        print("Fill in custom value {} for null entries.".format(value))
         return column.fillna(value)
     elif value == 'avg':
         try:
             m = column.mean()
-            print("Fill in average value {} for null entries.".format(m))
             return column.fillna(m)
         except TypeError:
             print("TypeError: Average method can only be used for numerical numbers")
@@ -119,7 +116,6 @@ def fill_null(column, value):
     elif value == 'med':
         try:
             m = column.median()
-            print("Fill in median value {} for null entries.".format(m))
             return column.fillna(m)
         except TypeError:
             print("TypeError: Median method can only be used for numerical numbers")
@@ -133,11 +129,25 @@ def fill_numeric_na(df, method, feature_type):
     return df
 
 
+def one_hot_encoding(df, feature_type):
+    one_hot_features = [i for i in df.columns.tolist() if feature_type[i] == 'cat']
+    for i in one_hot_features:
+        df[i] = df[i].astype(str)
+        one_hot = pd.get_dummies(df[i])
+        # Using the get_dummies will create a new column for every unique string in a certain column
+        df = df.drop(i, axis=1)
+        df = df.join(one_hot)
+    return df
+
+
 if __name__ == '__main__':
     t = time.time()
 
     print('loading data...')
     all_data, train, test, train_label = dataloader()
+
+    print('adding datetime features...')
+    train, test, all_data = add_date(train), add_date(test), add_date(all_data)
 
     # find type of each feature (cat:categorical or cont:continuous)
     # in dict format
@@ -154,16 +164,18 @@ if __name__ == '__main__':
     print('finding null_percentage...')
     null_dict = find_null_percentage(all_data)
 
-    print('adding datetime features...')
-    train = add_date(train)
-
     print('reducing categorical feature dimension...')
     train = categorical_feature_reduce_dim(df=train, feature_unique_value=unique_value_dict,
                                            critical_feature_num=8,critical_value=0.05)
+    # delete NA columns that has NA more than critica value%
     print('deleting na columns...')
     train=remove_na_col(train, 0.25, null_dict)
 
     print('filling na for numeric columns...')
     train = fill_numeric_na(train,'avg',feature_type_dict)
 
+    print('creating onehot encoded columns...')
+    train = one_hot_encoding(train,feature_type_dict)
+
+    print(train.shape)
     print('time ultilized {}'.format(time.time() - t))
